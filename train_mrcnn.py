@@ -83,3 +83,16 @@ if __name__ == '__main__':
         model_path = model.get_imagenet_weights()
     else:
         model_path = args.model
+
+    # Load weights
+    print("Loading weights ", model_path)
+    model.load_weight(model_path, by_name=True)
+
+    # Train or evaluate
+    if args.command == "train":
+        # Training dataset. Use the training set and 35K from the
+        # validation set, as as in the Mask RCNN paper.
+        dataset_train = CocoDataset()
+        #　dataset_train.load_coco(args.dataset, "train", year=args.year, auto_download=args.download)
+        dataset_train.load_coco(args.dataset, "valminusminival", year=args.year, auto_download=args.download)
+        dataset_train.prepare()

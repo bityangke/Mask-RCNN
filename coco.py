@@ -1,7 +1,7 @@
 import sys
 import os
 
-from mrcnn.config import Config
+
 
 
 
@@ -10,6 +10,7 @@ from mrcnn.config import Config
 ############################################################
 #  Configurations
 ############################################################
+from mrcnn.config import Config
 class Cococonfig(Config):
     """Configuration for training on MS COCO.
     Derives from the base Config class and overrides values specific
@@ -23,4 +24,5 @@ class Cococonfig(Config):
 ############################################################
 #  Dataset
 ############################################################
-
+class CocoDataset():
+    pass
