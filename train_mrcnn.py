@@ -87,7 +87,7 @@ if __name__ == '__main__':
 
     # Load weights
     print("Loading weights ", model_path)
-    # model.load_weight(model_path, by_name=True)
+    model.load_weight(model_path, by_name=True)
 
     # Train or evaluate
     if args.command == "train":
@@ -132,3 +132,5 @@ if __name__ == '__main__':
                     epochs=160,
                     layers='all',
                     augmentation=augmentation)
+
+        # TODO: evaluate model
