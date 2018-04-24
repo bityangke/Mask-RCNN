@@ -13,6 +13,12 @@ class Config(object):
 
     DETECTION_MIN_CONFIDENCE = 0.7
 
+    # Learning rate and momentum
+    # The Mask RCNN paper uses lr=0.02, but on TensorFlow it causes
+    # weights to explode. Likely due to differences in optimzer
+    # implementation.
+    LEARNING_RATE = 0.001
+
     def __init__(self):
         # Effective batch size
         pass

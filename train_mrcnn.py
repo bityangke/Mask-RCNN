@@ -1,10 +1,11 @@
 import argparse
-import coco
 import os
 import sys
+import imgaug
 
 from mrcnn.model import MaskRCNN
-from coco import Cococonfig
+from data.coco import Cococonfig
+from data.coco import CocoDataset
 
 ROOT_DIR = "I:\Mask RCNN"
 sys.path.append(ROOT_DIR)
@@ -86,7 +87,7 @@ if __name__ == '__main__':
 
     # Load weights
     print("Loading weights ", model_path)
-    model.load_weight(model_path, by_name=True)
+    # model.load_weight(model_path, by_name=True)
 
     # Train or evaluate
     if args.command == "train":
@@ -94,5 +95,40 @@ if __name__ == '__main__':
         # validation set, as as in the Mask RCNN paper.
         dataset_train = CocoDataset()
         #　dataset_train.load_coco(args.dataset, "train", year=args.year, auto_download=args.download)
-        dataset_train.load_coco(args.dataset, "valminusminival", year=args.year, auto_download=args.download)
+        dataset_train.load_coco(args.dataset, "train", year=args.year)
         dataset_train.prepare()
+
+        # Validation dataset
+        dataset_val = CocoDataset()
+        dataset_val.load_coco(args.dataset, "val", year=args.year)
+        dataset_val.prepare()
+
+        # Image Augmentation
+        # Right/Left flip 50% of the time
+        augmentation = imgaug.augmenters.Fliplr(0.5)
+
+        # Training - Stage 1
+        print("Training network heads")
+        model.train(dataset_train, dataset_val,
+                    learning_rate=config.LEARNING_RATE,
+                    epochs=40,
+                    layers='heads',
+                    augmentation=augmentation)
+
+        # Training - Stage 2
+        # Finetune layers from ResNet stage 4 and up
+        print("Fine tune Resnet stage 4 and up")
+        model.train(dataset_train, dataset_val,
+                    learning_rate=config.LEARNING_RATE,
+                    epochs=120,
+                    layers='4+',
+                    augmentation=augmentation)
+
+        # Training - Stage 3
+        # Fine tune all layers
+        print("Fine tune all layers")
+        model.train(dataset_train, dataset_val,
+                    learning_rate=config.LEARNING_RATE / 10,
+                    epochs=160,
+                    layers='all',
+                    augmentation=augmentation)

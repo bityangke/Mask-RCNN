@@ -123,3 +123,6 @@ class MaskRCNN():
                                 md5_hash='a268eb855778b3df3c7506639542a6af')
         return weights_path
 
+    def train(self, train_dataset, val_dataset, learning_rate, epochs, layers, augmentation=None):
+        pass
+

@@ -44,6 +44,10 @@ class Dataset(object):
         image_info.update(kwargs)
         self.image_info.append(image_info)
 
+    @property
+    def image_ids(self):
+        return self._image_ids
+
     def prepare(self, class_map=None):
         """Prepares the Dataset class for use.
         """
@@ -59,9 +63,9 @@ class Dataset(object):
         self._image_ids = np.arange(self.num_images)
 
         # Mapping from source class and image IDs to internal IDs
-        self.class_from_source_map = {"{}.{}".format(info['source'], info['ids']): id
+        self.class_from_source_map = {"{}.{}".format(info['source'], info['id']): id
                                     for info, id in zip(self.class_info, self.class_ids)}
-        self.image_from_source_map = {"{}.{}".format(info['source'], info['ids']): id
+        self.image_from_source_map = {"{}.{}".format(info['source'], info['id']): id
                                     for info, id in zip(self.image_info, self.image_ids)}
 
         # Map sources to class_ids they support
@@ -75,6 +79,14 @@ class Dataset(object):
                 # Include BG class in all datasets
                 if i == 0 or source == info['source']:
                     self.source_class_ids[source].append(i)
+
+    def map_source_class_id(self, source_class_id):
+        """Takes a source class ID and returns the int class ID assigned to it.
+
+        For example:
+        dataset.map_source_class_id("coco.12") -> 23
+        """
+        return self.class_from_source_map[source_class_id]
 
     # Return an empty mask
     def load_mask(self, image_id):
