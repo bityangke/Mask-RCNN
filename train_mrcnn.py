@@ -4,8 +4,8 @@ import sys
 import imgaug
 
 from mrcnn.model import MaskRCNN
-from data.coco import Cococonfig
-from data.coco import CocoDataset
+from dataset.coco import Cococonfig
+from dataset.coco import CocoDataset
 
 ROOT_DIR = "I:\Mask RCNN"
 sys.path.append(ROOT_DIR)

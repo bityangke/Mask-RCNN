@@ -21,7 +21,9 @@ class Config(object):
 
     def __init__(self):
         # Effective batch size
-        pass
+        self.BATCH_SIZE = self.IMAGES_PER_GPU * self.GPU_COUNT
+
+
 
 
     def display(self):
