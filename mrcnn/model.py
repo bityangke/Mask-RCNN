@@ -197,5 +197,30 @@ class MaskRCNN():
 
         keras_model = keras_model or self.keras_model
 
+        # In multi-GPU training, we wrap the model. Get layers
+        # of the inner model because they have the weights.
+        layers = keras_model.inner_model.layers if hasattr(keras_model, "inner_model")\
+            else keras_model.layers
+        for layer in layers:
+            # Is the layer a model?
+            if layer.__class__.__name__ == 'Model':
+                print("In model: ", layer.name)
+                self.set_trainable(layer_regex, keras_model=layer, indent=indent + 4)
+                continue
+
+            if not layer.weights:
+                continue
+            # Is it trainable?
+            trainable = bool(re.fullmatch(layer_regex, layer.name))
+            # Update layer. If layer is a container, update inner layer .
+            if layer.__class__.__name__ == 'TimeDistributed':
+                layer.layer.trainable = trainable
+            else:
+                layer.trainable = trainable
+            # Print trainable layer names
+            if trainable and verbose > 0:
+                log("{}{:20}   ({})".format(" " * indent, layer.name,
+                                            layer.__class__.__name__))
+
     def compile(self, learning_rate, momentum):
         pass
