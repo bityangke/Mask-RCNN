@@ -51,6 +51,18 @@ class Config(object):
     # are based on a Resnet101 backbone.
     BACKBONE_STRIDES = [4, 8, 16, 32, 64]
 
+    # Length of square anchor side in pixels
+    RPN_ANCHOR_SCALES = (32, 64, 128, 256, 512)
+
+    # Ratios of anchors at each cell (width/height)
+    # A value of 1 represents a square anchor, and 0.5 is a wide anchor
+    RPN_ANCHOR_RATIOS = [0.5, 1, 2]
+
+    # Anchor stride
+    # If 1 then anchors are created for each cell in the backbone feature map.
+    # If 2, then anchors are created for every other cell, and so on.
+    RPN_ANCHOR_STRIDE = 1
+
     # Input image resizing
     # Generally, use the "square" resizing mode for training and inferencing
     # and it should work well in most cases. In this mode, images are scaled
