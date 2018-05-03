@@ -11,6 +11,7 @@ import logging
 import multiprocessing
 
 from mrcnn.utils import *
+from mrcnn.data_generator import *
 
 import keras
 import tensorflow as tf

@@ -87,6 +87,10 @@ class Config(object):
     IMAGE_MIN_DIM = 800
     IMAGE_MAX_DIM = 1024
 
+    # If enabled, resizes instance masks to a smaller size to reduce
+    # memory load. Recommended when using high-resolution images.
+    USE_MINI_MASK = True
+
     def __init__(self):
         # Effective batch size
         self.BATCH_SIZE = self.IMAGES_PER_GPU * self.GPU_COUNT
