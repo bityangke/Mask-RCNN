@@ -132,5 +132,3 @@ if __name__ == '__main__':
                     epochs=160,
                     layers='all',
                     augmentation=augmentation)
-
-        # TODO: evaluate model

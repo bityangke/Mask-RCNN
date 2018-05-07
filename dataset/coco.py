@@ -122,9 +122,6 @@ class CocoDataset(dataset.Dataset):
             # Call super class to return an empty mask
             return super(CocoDataset, self).load_mask(image_id)
 
-    # TODO: def image_reference?
-
-
     # The following two functions are from pycocotools with a few changes.
     def annToRLE(self, ann, height, width):
         """
@@ -156,5 +153,4 @@ class CocoDataset(dataset.Dataset):
 
 ############################################################
 #  COCO Evaluation
-# TODO: Evaluate model
 ############################################################

@@ -68,10 +68,10 @@ def data_generator(dataset, config, shuffle=True, augment=False, augmentation=No
                 np.random.shuffle(image_ids)
 
             # Get GT bounding boxes and masks for image.
-            image_id = image_ids[image_index]
-            image, image_meta, gt_class_ids, gt_boxes, gt_masks = \
-                load_image_gt(dataset, config, image_id, augment=augment, augmentation=augmentation,
-                              use_mini_mask=config.USE_MINI_MASK)
+            # image_id = image_ids[image_index]
+            # image, image_meta, gt_class_ids, gt_boxes, gt_masks = \
+            #             load_image_gt(dataset, config, image_id, augment=augment, augmentation=augmentation,
+            #                   use_mini_mask=config.USE_MINI_MASK)
 
 
 def load_image_gt(dataset, config, image_id, augment=False, augmentation=None,
@@ -99,7 +99,11 @@ def load_image_gt(dataset, config, image_id, augment=False, augmentation=None,
         defined in MINI_MASK_SHAPE.
     """
     # Load image and mask
-    pass
+    image = dataset.load_image(image_id)
+    mask, class_ids = dataset.load_mask(image_id)
+    original_shape = image.shape
+    return None * 5
+
 
 
 ############################################################
