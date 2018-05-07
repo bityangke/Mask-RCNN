@@ -1,5 +1,5 @@
 import numpy as np
-from mrcnn.utils import compute_backbone_shapes
+from mrcnn.utils import *
 
 
 
@@ -102,9 +102,14 @@ def load_image_gt(dataset, config, image_id, augment=False, augmentation=None,
     image = dataset.load_image(image_id)
     mask, class_ids = dataset.load_mask(image_id)
     original_shape = image.shape
-    return None * 5
-
-
+    image, window, scale, padding, crop = resize_image(
+        image,
+        min_dim=config.IMAGE_MIN_DIM,
+        min_scale=config.IMAGE_MIN_SCALE,
+        max_dim=config.IMAGE_MAX_DIM,
+        mode=config.IMAGE_RESIZE_MODE
+    )
+    mask = resize_mask(mask, scale, padding, crop)
 
 ############################################################
 #  Anchors
