@@ -95,6 +95,7 @@ class Config(object):
     # If enabled, resizes instance masks to a smaller size to reduce
     # memory load. Recommended when using high-resolution images.
     USE_MINI_MASK = True
+    MINI_MASK_SHAPE = (56, 56)
 
     def __init__(self):
         # Effective batch size

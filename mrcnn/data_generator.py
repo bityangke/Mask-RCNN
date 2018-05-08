@@ -1,4 +1,6 @@
 import numpy as np
+import logging
+
 from mrcnn.utils import *
 
 
@@ -68,10 +70,19 @@ def data_generator(dataset, config, shuffle=True, augment=False, augmentation=No
                 np.random.shuffle(image_ids)
 
             # Get GT bounding boxes and masks for image.
-            # image_id = image_ids[image_index]
-            # image, image_meta, gt_class_ids, gt_boxes, gt_masks = \
-            #             load_image_gt(dataset, config, image_id, augment=augment, augmentation=augmentation,
-            #                   use_mini_mask=config.USE_MINI_MASK)
+            image_id = image_ids[image_index]
+            image, image_meta, gt_class_ids, gt_boxes, gt_masks = \
+                        load_image_gt(dataset, config, image_id, augment=augment, augmentation=augmentation,
+                                      use_mini_mask=config.USE_MINI_MASK)
+
+            # Skip images that have no instances. This can happen in cases
+            # where we train on a subset of classes and the image doesn't
+            # have any of the classes we care about.
+            if not np.any(gt_class_ids > 0):
+                continue
+        except (GeneratorExit, KeyboardInterrupt):
+            raise
+
 
 
 def load_image_gt(dataset, config, image_id, augment=False, augmentation=None,
@@ -110,6 +121,73 @@ def load_image_gt(dataset, config, image_id, augment=False, augmentation=None,
         mode=config.IMAGE_RESIZE_MODE
     )
     mask = resize_mask(mask, scale, padding, crop)
+
+    # Random horizontal flips.
+    # TODO: will be removed in a feature update in favor of augmentation
+    if augment:
+        logging.warning("'augment' is depricated. Use 'augmentation' instead")
+        if random.randint(0, 1):
+            image = np.fliplr(image)
+            mask = np.fliplr(mask)
+
+    # Augmentation
+    # This requires the imaaug lib
+    if augmentation:
+        import imgaug
+
+        # Augmentors that are safe to apply to masks
+        # Some, such as Affine, have setting that make them unsafe, so always
+        # test your augmentation on masks
+        MASK_AUGMENTERS = ["Sequential", "SomeOf", "OneOf", "Sometimes",
+                           "Fliplr", "Flipud", "CropAndPad",
+                           "Affine", "PiecewiseAffine"]
+
+        def hook(images, augmenter, parents, default):
+            """"Determines which augmenters to apply to masks"""
+            return (augmenter.__class__.__name__ in MASK_AUGMENTERS)
+
+        # Store shapes before augmentation to compare
+        image_shape = image.shape
+        mask_shape = mask.shape
+        # Mask augmenters deterministic to apply similarly to images and masks
+        det = augmentation.to_deterministic()
+        image = det.augment_image(image)
+        # Change mask to np.uint8 because imgaug doesn't support np.bool
+        mask = det.augment_image(mask.astype(np.uint8), hooks=imgaug.HooksImages(activator=hook))
+
+        # Verify that shapes didn't change
+        assert image.shape == image_shape, "Augmentation shouldn't change image size"
+        assert mask.shape == mask_shape, "Augmentation shouldn't change mask size"
+        # Change mask bach to bool
+        mask = mask.astype(np.bool)
+
+    # Note that some boxes might be all zeros if the corresponding mask got cropped out.
+    # and here is to filter them out
+    _idx = np.sum(mask, axis=(0, 1)) > 0
+    mask = mask[:, :, _idx]
+    class_ids = class_ids[_idx]
+    # Bounding boxes. Note that some boxes might all zeros
+    # if the corresponding mask got cropped out.
+    # bbox: [num_instances, (y1, x1, y2, x2)]
+    bbox = extract_bboxes(mask)
+
+    # Active classes
+    # Different datasets have different classes, so track the
+    # classes supported in the dataset of this image.
+    active_class_ids = np.zeros([dataset.num_classes], dtype=np.int32)
+    source_class_ids = dataset.source_class_ids[dataset.image_info[image_id]["source"]]
+    active_class_ids[source_class_ids] = 1
+
+    # Resize masks to smaller size to reduce memory usage
+    if use_mini_mask:
+        mask = minimize_mask(bbox, mask, config.MINI_MASK_SHAPE)
+
+    # Image meta data
+    image_meta = compose_image_meta(image_id, original_shape, image.shape, window, scale, active_class_ids)
+
+    return image, image_meta, class_ids, bbox, mask
+
+
 
 ############################################################
 #  Anchors
@@ -169,4 +247,29 @@ def generate_anchors(scales, ratios, shape, feature_stride, anchor_stride):
                             box_centers + 0.5 * box_sizes], axis=1)
     return boxes
 
+############################################################
+#  Data Formatting
+############################################################
+def compose_image_meta(image_id, original_image_shape, image_shape,
+                       window, scale, active_class_ids):
+    """Takes attributes of an image and puts them in one 1D array.
 
+    image_id: An int ID of the image. Useful for debugging.
+    original_image_shape: [H, W, C] before resizing or padding.
+    image_shape: [H, W, C] after resizing and padding
+    window: (y1, x1, y2, x2) in pixels. The area of the image where the real
+            image is (excluding the padding)
+    scale: The scaling factor applied to the original image (float32)
+    active_class_ids: List of class_ids available in the dataset from which
+        the image came. Useful if training on images from multiple datasets
+        where not all classes are present in all datasets.
+    """
+    meta = np.array(
+        [image_id] +                  # size=1
+        list(original_image_shape) +  # size=3
+        list(image_shape) +           # size=3
+        list(window) +                # size=4 (y1, x1, y2, x2) in image cooredinates
+        [scale] +                     # size=1
+        list(active_class_ids)        # size=num_classes
+    )
+    return meta

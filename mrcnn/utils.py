@@ -165,3 +165,51 @@ def resize_mask(mask, scale, padding, crop=None):
     else:
         mask = np.pad(mask, padding, mode='constant', constant_values=0)
     return mask
+
+def minimize_mask(bbox, mask, mini_shape):
+    """Resize masks to a smaller version to reduce memory load.
+    Mini-masks can be resized back to image scale using expand_masks()
+
+    See inspect_data.ipynb notebook for more details.
+    """
+    mini_mask = np.zeros(mini_shape + (mask.shape[-1],), dtype=bool)
+    for i in range(mask.shape[-1]):
+        # Pick slice and cast to bool in case load_mask() returned wrong dtype
+        m = mask[:, :, i].astype(bool)
+        y1, x1, y2, x2 = bbox[i][:4]
+        m = m[y1:y2, x1:x2]
+        if m.size == 0:
+            raise Exception("Invalid bounding box with area of zero")
+        # Resize with bilinear interpolation
+        m = skimage.transform.resize(m, mini_shape, order=1, mode="constant")
+        mini_mask[:, :, i] = np.around(m).astype(np.bool)
+    return mini_mask
+
+############################################################
+#  Bounding Boxes
+############################################################
+def extract_bboxes(mask):
+    """Compute bounding boxes from masks
+    mask: [height, width, num_instances]. Mask pixels are either 1 or 0.
+
+    Returns: box array [num_instances, (y1, x1, y2, x2)]
+
+    """
+    boxes = np.zeros([mask.shape[-1], 4], dtype=np.int32)
+    for i in range(mask.shape[-1]):
+        m = mask[:, :, i]
+        # Bounding box.
+        horizontal_indicies = np.where(np.any(m, axis=0))[0]
+        vertical_indicies = np.where(np.any(m, axis=0))[0]
+        if horizontal_indicies.shape[0]:
+            x1, x2 = horizontal_indicies[[0, -1]]
+            y1, y2 = vertical_indicies[[0, -1]]
+            # x2 and y2 should not be part of the box. Increment by 1.
+            x2 += 1
+            y2 += 1
+        else:
+            # No mask for this instance. Might happen due to
+            # resizing or cropping. Set bbox to zeros.
+            x1, x2, y1, y2 = 0, 0, 0, 0
+        boxes[i] = np.array([y1, x1, y2, x2])
+    return boxes.astype(np.int32)
