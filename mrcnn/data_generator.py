@@ -55,7 +55,7 @@ def data_generator(dataset, config, shuffle=True, augment=False, augmentation=No
     # Anchors
     # [anchor_count, (y1, x1, y2, x2)]
     backbone_shapes = compute_backbone_shapes(config, config.IMAGE_SHAPE)
-    anchor = generate_pyramid_anchors(config.RPN_ANCHOR_SCALES,
+    anchors = generate_pyramid_anchors(config.RPN_ANCHOR_SCALES,
                                       config.RPN_ANCHOR_RATIOS,
                                       backbone_shapes,
                                       config.BACKBONE_STRIDES,
@@ -80,6 +80,10 @@ def data_generator(dataset, config, shuffle=True, augment=False, augmentation=No
             # have any of the classes we care about.
             if not np.any(gt_class_ids > 0):
                 continue
+
+            # PRN Targets
+            rpn_match, rpn_bbox = build_rpn_target(image.shape, anchors, gt_class_ids, gt_boxes, config)
+
         except (GeneratorExit, KeyboardInterrupt):
             raise
 
@@ -186,6 +190,37 @@ def load_image_gt(dataset, config, image_id, augment=False, augmentation=None,
     image_meta = compose_image_meta(image_id, original_shape, image.shape, window, scale, active_class_ids)
 
     return image, image_meta, class_ids, bbox, mask
+
+def build_rpn_targets(image_shape, anchors, gt_class_ids, gt_boxes, config):
+    """Given the anchors and GT boxes, compute overlaps and identify positive
+    anchors and deltas to refine them to match their corresponding GT boxes.
+
+    anchors: [num_anchors, (y1, x1, y2, x2)]
+    gt_class_ids： [num_gt_boxes] Integer class IDs.
+    gt_boxes: [num_gt_boxes, (y1, x1, y2, x2)]
+
+    Returns:
+    rpn_match: [N] (int 32) matches between anchors and GT boxes.
+               1 = positive anchor, -1 = negativea anchor, 0 = neutral
+    rpn_bbox: [N, (dy, dx, log(dh), log(dw))] Anchor bbox deltas
+    """
+    # RPN match: 1 = positive anchor, -1 = negative anchor, 0 = neutral
+    rpn_match = np.zeros([anchors.shape[0]], dtype=np.int32)
+    # PRN bounding boxes:  [max anchors per image, (dy, dx, log(dh), log(dw))]
+    rpn_bbox = np.zeros((config.RPN_TRAIN_ANCHORS_PER_IMAGE, 4))
+
+    # Handle COCO crowds
+    # A crowd box in COCO is a bounding box around several instances. Exclude
+    # them from training. A crowd box is given a negative class ID.
+    crowd_ix = np.where(gt_class_ids < 0)[0]
+    if crowd_ix.shape[0] > 0:
+        # Filter out crowds from ground truth class IDs and boxes
+        non_crowd_ix = np.where(gt_class_ids > 0)[0]
+        crowd_boxes = gt_boxes[crowd_ix]
+        gt_class_ids = gt_class_ids[non_crowd_ix]
+        gt_boxes = gt_boxes[non_crowd_ix]
+        # Compute overlaps with crowd boxes [anchors, crowds]
+
 
 
 

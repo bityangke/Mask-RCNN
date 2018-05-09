@@ -213,3 +213,8 @@ def extract_bboxes(mask):
             x1, x2, y1, y2 = 0, 0, 0, 0
         boxes[i] = np.array([y1, x1, y2, x2])
     return boxes.astype(np.int32)
+
+def compute_overlaps(boxes1, boxes2):
+    """
+    
+    """
