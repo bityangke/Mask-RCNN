@@ -66,6 +66,10 @@ class Config(object):
     # If 2, then anchors are created for every other cell, and so on.
     RPN_ANCHOR_STRIDE = 1
 
+    # Bounding box refinement standard deviation for RPN and final detections.
+    RPN_BBOX_STD_DEV = np.array([0.1, 0.1, 0.2, 0.2])
+    BBOX_STD_DEV = np.array([0.1, 0.1, 0.2, 0.2])
+
     # Input image resizing
     # Generally, use the "square" resizing mode for training and inferencing
     # and it should work well in most cases. In this mode, images are scaled
