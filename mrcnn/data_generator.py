@@ -89,9 +89,9 @@ def data_generator(dataset, config, shuffle=True, augment=False, augmentation=No
                 pass
 
 
+
         except (GeneratorExit, KeyboardInterrupt):
             raise
-
 
 
 def load_image_gt(dataset, config, image_id, augment=False, augmentation=None,
@@ -308,9 +308,41 @@ def build_rpn_targets(image_shape, anchors, gt_class_ids, gt_boxes, config):
 
     return rpn_match, rpn_bbox
 
+def generate_random_rois(image_shape, count, gt_class_ids, gt_boxes):
+    """Generates ROI proposals similar to what a region proposal network
+    would generate.
 
+    image_shape: [Height, Width, Depth]
+    count: Number of ROIs to generate
+    gt_class_ids: [N] Integer ground truth class IDs
+    gt_boxes: [N, (y1, x1, y2, x2)] Ground truth boxes in pixels.
 
+    Returns: [count, (y1, x1, y2, x2)] ROI boxes in pixels.
+    """
+    # placeholder
+    rois = np.zeros((count, 4), dtype=np.int32)
 
+    # Generate random ROIs around GT boxes(90%)
+    rois_per_box = int(0.9 * count / gt_boxes.shape[0])
+    for i in range(gt_boxes.shape[0]):
+        gt_y1, gt_x1, gt_y2, gt_x2 = gt_boxes[i]
+        h = gt_y2 - gt_y1
+        w = gt_x2 - gt_x1
+
+        # random boundaries
+        r_y1 = max(gt_y1 - h, 0)
+        r_y2 = min(gt_y2 + h, image_shape[0])
+        r_x1 = max(gt_x1 - w, 0)
+        r_x2 = min(gt_x2 + w, image_shape[1])
+
+        # To avoid generating boxes with zero area, we generate double what
+        # we need and filter out the extra. If we get fewer valid boxes
+        # than we need, we loop and try again.
+        while True:
+            y1y2 = np.random.randint(r_y1, r_y2, (rois_per_box * 2, 2))
+            x1x2 = np.random.randint(r_x1, r_x2, (rois_per_box * 2, 2))
+            # Filter out zero area boxes
+            threshold = 1
 
 
 
