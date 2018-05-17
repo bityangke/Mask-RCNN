@@ -70,6 +70,9 @@ class Config(object):
     RPN_BBOX_STD_DEV = np.array([0.1, 0.1, 0.2, 0.2])
     BBOX_STD_DEV = np.array([0.1, 0.1, 0.2, 0.2])
 
+    # Maximum number of ground truth instances to use in one image
+    MAX_GT_INSTANCES = 100
+
     # Input image resizing
     # Generally, use the "square" resizing mode for training and inferencing
     # and it should work well in most cases. In this mode, images are scaled
