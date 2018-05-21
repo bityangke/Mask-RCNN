@@ -14,6 +14,9 @@ from mrcnn.utils import *
 from mrcnn.data_generator import *
 
 import keras
+import keras.backend as K
+import keras.layers as KL
+
 import tensorflow as tf
 
 ############################################################
@@ -35,7 +38,40 @@ class MaskRCNN():
         self.keras_model = self.build(mode=mode, config=config)
 
     def build(self, mode, config):
-        return True
+        """
+        Build Mask R-CNN architecture.
+        input_shape: The shape of the input image
+        mode: Either "training" or "inference". The inputs and outputs of the model differ accordingly.
+        """
+        assert mode in ['training', 'inference']
+
+        # Image size must be dividable by 2 multiple times
+        h, w = config.IMAGE_SHAPE[:2]
+        if h / 2**6 != int(h / 2**6) or w / 2**6 != int(w / 2**6):
+            raise ValueError("Image size must be dividable by 2 at least 6 times "
+                            "to avoid fractions when downscaling and upscaling."
+                            "For example, use 256, 320, 384, 448, 512, ... etc. ")
+
+        # Inputs
+        input_image = KL.Input(shape=[None, None, 3], name="input_image")
+        input_image_meta = KL.Input(shape=[config.IMAGE_META_SIZE], name="input_image_meta")
+
+        if mode == "training":
+            # RPN GT
+            input_rpn_match = KL.Input(shape=[None, 1], name="input_rpn_match", dtype=tf.int32)
+            input_rpn_bbox = KL.Input(shape=[None, 4], name="input_rpn_bbox", dtype=tf.float32)
+
+            # Detection GT (class IDs, bounding boxes, and masks)
+            # 1. GT class IDs (zero padded)
+            input_gt_class_ids = KL.Input(shape=[None], name="input_gt_class_ids", dtype=tf.int32)
+
+            # 2. GT Boxes in pixels (zero padded)
+            input_gt_boxes = KL.Input(shape=[None, 4], name="input_gt_boxes", dtype=tf.float32)
+            # Normalize coordinates
+            gt_boxes = KL.Lambda(lambda x: norm_boxes_graph(x, K.shape(input_image)[1:3]))(input_gt_boxes)
+
+            # 3. GT Masks (zero padded)
+            # [batch, height, width, MAX_GT_INSTANCES]
 
     def find_last(self):
         """Finds the last checkpoint file of the last trained model in the

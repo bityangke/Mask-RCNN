@@ -73,6 +73,7 @@ class Config(object):
     # Maximum number of ground truth instances to use in one image
     MAX_GT_INSTANCES = 100
 
+
     # Input image resizing
     # Generally, use the "square" resizing mode for training and inferencing
     # and it should work well in most cases. In this mode, images are scaled
@@ -119,7 +120,8 @@ class Config(object):
 
         # Image meta data length
         # See compose_image_meta() for details
-        # self.IMAGE_META_SIZE = 1 + 3 + 3 + 4 + 1 + self.NUM_CLASSES
+        # image_id, original_shape, image_shape, window, scale, active_class_ids(one hot)
+        self.IMAGE_META_SIZE = 1 + 3 + 3 + 4 + 1 + self.NUM_CLASSES
 
 
     def display(self):
