@@ -353,7 +353,33 @@ def generate_random_rois(image_shape, count, gt_class_ids, gt_boxes):
     return rois
 
 def build_detection_targets(rpn_rois, gt_class_ids, gt_boxes, gt_masks, config):
-    pass
+    """Generate targets for training Stage 2 classifier and mask heads.
+      This is not used in normal training. It's useful for debugging or to train
+      the Mask RCNN heads without using the RPN head.
+
+      Inputs:
+      rpn_rois: [N, (y1, x1, y2, x2)] proposal boxes.
+      gt_class_ids: [instance count] Integer class IDs
+      gt_boxes: [instance count, (y1, x1, y2, x2)]
+      gt_masks: [height, width, instance count] Grund truth masks. Can be full
+                size or mini-masks.
+
+      Returns:
+      rois: [TRAIN_ROIS_PER_IMAGE, (y1, x1, y2, x2)]
+      class_ids: [TRAIN_ROIS_PER_IMAGE]. Integer class IDs.
+      bboxes: [TRAIN_ROIS_PER_IMAGE, NUM_CLASSES, (y, x, log(h), log(w))]. Class-specific
+              bbox refinements.
+      masks: [TRAIN_ROIS_PER_IMAGE, height, width, NUM_CLASSES). Class specific masks cropped
+             to bbox boundaries and resized to neural network output size.
+      """
+    assert rpn_rois.shape[0] > 0
+    assert gt_class_ids.dtype == np.int32, "Expected int but got {}".format(
+        gt_class_ids.dtype)
+    assert gt_boxes.dtype == np.int32, "Expected int but got {}".format(
+        gt_boxes.dtype)
+    assert gt_masks.dtype == np.bool_, "Expected bool but got {}".format(
+        gt_masks.dtype)
+
 
 ############################################################
 #  Anchors

@@ -72,6 +72,17 @@ class MaskRCNN():
 
             # 3. GT Masks (zero padded)
             # [batch, height, width, MAX_GT_INSTANCES]
+            if config.USE_MINI_MASK:
+                input_gt_boxes = KL.Input(shape=[config.MINI_MASK_SHAPE[0],
+                                                 config.MINI_MASK_SHAPE[1], None],
+                                          name="input_gt_masks", dtype=bool)
+            else:
+                input_gt_boxes = KL.Input(shape=[config.IMAGE_SHAPE[0], config.IMAGE_SHAPE[1], None],
+                                          name="input_gt_masks", dtype=bool)
+        # elif mode == "inference":
+        #     # Anchors in normalized coordinates
+        #     input_anchors = KL.Input(shape=[None, 4], name="input_anchors")
+
 
     def find_last(self):
         """Finds the last checkpoint file of the last trained model in the
