@@ -254,6 +254,12 @@ def compute_iou(box, boxes, box_area, boxes_area):
     iou = intersection / union
     return iou
 
+def box_refinement(box, gt_box):
+    """Compute refinement needed to transform box to gt_box.
+    box and gt_box are [N, (y1, x1, y2, x2)]. (y2, x2) is
+    assumed to be outside the box.
+    """
+
 ############################################################
 #  Miscellenous Graph Functions(with tf not only pure python)
 ############################################################

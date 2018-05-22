@@ -380,6 +380,94 @@ def build_detection_targets(rpn_rois, gt_class_ids, gt_boxes, gt_masks, config):
     assert gt_masks.dtype == np.bool_, "Expected bool but got {}".format(
         gt_masks.dtype)
 
+    # Trim empty padding in gt_bopxes and gt_masks parts
+    instance_ids = np.where(gt_class_ids > 0)[0]
+    assert instance_ids.shape[0] > 0, "Image must contain instances."
+    gt_class_ids = gt_class_ids[instance_ids]
+    gt_boxes = gt_boxes[instance_ids]
+    gt_masks = gt_masks[:, :, instance_ids]
+
+    # Compute areas of ROIs and ground truth boxes
+    rpn_roi_area = (rpn_rois[:, 2] - rpn_rois[:, 0]) * (rpn_rois[:, 3] - rpn_rois[:, 1])
+    gt_box_area = (gt_boxes[:, 2] - gt_boxes[:, 0]) * (gt_boxes[:, 3] - gt_boxes[:, 1])
+    gt_box_area = (gt_boxes[:, 2] - gt_boxes[:, 0]) * (gt_boxes[:, 3] - gt_boxes[:, 1])
+
+    # Compute overlaps [rpn_rois, gt_boxes]
+    overlaps = np.zeros((rpn_rois.shape[0], gt_boxes.shape[0]))
+    for i in range(overlaps.shape[1]):
+        gt = gt_boxes[i]
+        overlaps[:, i] = compute_iou(gt, rpn_rois, gt_box_area[i], rpn_roi_area)
+
+    # Assign ROIs to GT boxes
+    rpn_roi_iou_argmax = np.argmax(overlaps, axis=1)
+    rpn_roi_iou_max = overlaps[np.arange(overlaps.shape[0]), rpn_roi_iou_argmax]
+    # GT box assigned to each ROI
+    rpn_roi_gt_boxes = gt_boxes[rpn_roi_iou_argmax]
+    rpn_roi_gt_class_ids = gt_class_ids[rpn_roi_iou_argmax]
+
+    # Positive ROIs are those with >= 0.5 IoU with a GT box
+    fg_ids = np.where(rpn_roi_iou_argmax > 0.5)[0]
+
+    # Negative ROIs are those IoU 0.1 - 0.5 (hard example mining)
+    # TODO: To hard example mine or not to hard example mine, that's the question
+    # bg_ids = np.where((rpn_roi_iou_max >= 0.1) & (rpn_roi_iou_max) < 0.5)[0]
+    bg_ids = np.where(rpn_roi_iou_argmax < 0.5)[0]
+
+    # Subsample ROIs. Aim for 33% forground
+    # FG
+    fg_roi_count = int(config.TRAIN_ROIS_PER_IMAGE * config.ROI_POSITIVE_RATIO)
+    if fg_ids.shape[0] > fg_roi_count:
+        keep_fg_ids = np.random.choice(fg_ids, fg_roi_count, replace=False)
+    else:
+        keep_fg_ids = fg_ids
+    # BG
+    remaining = config.TRAIN_ANCHORS_PER_IMAGE - keep_fg_ids.shape[0]
+    if bg_ids.shape[0] > remaining:
+        keep_bg_ids = np.random.choice(bg_ids, remaining, replace=False)
+    else:
+        keep_bg_ids = bg_ids
+
+    # Combine indicies of ROIs to keep
+    keep = np.concatenate([keep_fg_ids, keep_bg_ids])
+    # Need more?
+    remaining = config.TRAIN_ROIS_PER_IMAGE - keep.shape[0]
+    if remaining > 0:
+        # Looks like we don't have enough samples to maintain the desired
+        # balance. Reduce requirements and fill in the rest. This is
+        # likely different from the Mask RCNN paper.
+
+        # This is a small chance we have neither fg nor bg samples.
+        if keep.shape[0] == 0:
+            # Pick bg regions with easier IoU threshold
+            bg_ids = np.where(rpn_roi_iou_argmax < 0.5)[0]
+            assert bg_ids.shape[0] >= remaining
+            keep_bg_ids = np.random.choice(bg_ids, remaining, replace=False)
+            assert keep_bg_ids.shape[0] == remaining
+            keep = np.concatenate([keep, keep_bg_ids])
+        else:
+            # Fill the rest with repeated bg rois
+            keep_extra_ids = np.random.choice(keep_bg_ids, remaining, replace=True)
+            keep = np.concatenate([keep, keep_extra_ids])
+
+    assert keep.shape[0] == config.TRAIN_ROIS_PER_IMAGE, "keep doesn't match ROI batch size {}, {}".format(
+        keep.shape[0], config.TRAIN_ROIS_PER_IMAGE
+    )
+
+    # Reset the gt boxes assigned to BG ROIs
+    rpn_roi_gt_boxes[keep_bg_ids, :] = 0
+    rpn_roi_gt_class_ids[keep_bg_ids] = 0
+
+    # For each kept ROI, assign a class_id, and for FG ROIs also add bbox refinement
+    rois = rpn_rois[keep]
+    roi_gt_boxes = rpn_roi_gt_boxes[keep]
+    roi_gt_class_ids = rpn_roi_gt_class_ids[keep]
+    roi_gt_assignment = rpn_roi_iou_argmax[keep]
+
+    # Class-ware bbox deltas. [y, x, log(h), log(w)]
+    bboxes = np.zeros((config.TRAIN_ROIS_PER_IMAGE, config.NUM_CLASSES, 4), dtype=np.float32)
+    pos_ids = np.where(roi_gt_class_ids > 0)[0]
+    bboxes[pos_ids, roi_gt_class_ids[pos_ids]] =
+
 
 ############################################################
 #  Anchors

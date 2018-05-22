@@ -73,6 +73,15 @@ class Config(object):
     # Maximum number of ground truth instances to use in one image
     MAX_GT_INSTANCES = 100
 
+    # Number of ROIs per image to feed to classifier/mask heads
+    # The Mask RCNN paper uses 512 but often the RPN doesn't generate
+    # enough positive proposals to fill this and keep a positive:negative
+    # ratio of 1:3. You can increase the number of proposals by adjusting
+    # the RPN NMS threshold.
+    TRAIN_ROIS_PER_IMAGE = 200
+
+    # Percent of positive ROIs used to train classifier/mask heads
+    ROI_POSITIVE_RATIO = 0.33
 
     # Input image resizing
     # Generally, use the "square" resizing mode for training and inferencing
