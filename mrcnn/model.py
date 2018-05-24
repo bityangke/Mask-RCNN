@@ -73,15 +73,22 @@ class MaskRCNN():
             # 3. GT Masks (zero padded)
             # [batch, height, width, MAX_GT_INSTANCES]
             if config.USE_MINI_MASK:
-                input_gt_boxes = KL.Input(shape=[config.MINI_MASK_SHAPE[0],
+                input_gt_masks = KL.Input(shape=[config.MINI_MASK_SHAPE[0],
                                                  config.MINI_MASK_SHAPE[1], None],
                                           name="input_gt_masks", dtype=bool)
             else:
-                input_gt_boxes = KL.Input(shape=[config.IMAGE_SHAPE[0], config.IMAGE_SHAPE[1], None],
+                input_gt_masks = KL.Input(shape=[config.IMAGE_SHAPE[0], config.IMAGE_SHAPE[1], None],
                                           name="input_gt_masks", dtype=bool)
-        # elif mode == "inference":
-        #     # Anchors in normalized coordinates
-        #     input_anchors = KL.Input(shape=[None, 4], name="input_anchors")
+
+        elif mode == "inference":
+            # Anchors in normalized coordinates
+            input_anchors = KL.Input(shape=[None, 4], name="input_anchors")
+
+        # Build the shared convolutional layers.
+        # Bottom-up layers
+        # Returns a list of the last layers of each stages, 5 in total.
+        # Don't create the thead(stage 5), so we pick the 4th item in the list.
+        _, C2, C3, C4, C5 = None
 
 
     def find_last(self):
@@ -337,4 +344,12 @@ class MaskRCNN():
             self.keras_model.metrics_names.append(name)
             self.keras_model.metrics_tensors.append(tf.reduce_mean(layer.output, keep_dims=True))
 
-
+############################################################
+#  Resnet Graph
+############################################################
+def resnet_graph(input_image, architecture, stage5=False, train_bn=True):
+    """Build a ResNet graph.
+        architecture: Can be resnet50 or resnet101
+        stage5: Boolean. If False, stage5 of the network is not created
+        train_bn: Boolean. Train or freeze Batch Norm layres
+    """

@@ -117,6 +117,10 @@ class Config(object):
     USE_MINI_MASK = True
     MINI_MASK_SHAPE = (56, 56)
 
+    # Shape of output mask
+    # To change this you also need to change the neural network mask branch
+    MASK_SHAPE = (28, 28)
+
     def __init__(self):
         # Effective batch size
         self.BATCH_SIZE = self.IMAGES_PER_GPU * self.GPU_COUNT

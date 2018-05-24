@@ -1,5 +1,6 @@
 import numpy as np
 import logging
+import skimage
 
 from mrcnn.utils import *
 
@@ -134,6 +135,7 @@ def data_generator(dataset, config, shuffle=True, augment=False, augmentation=No
             b += 1
 
             # Batch full?
+            # TODO: change input for keypoint and write related code
             if b >= batch_size:
                 inputs = [batch_images, batch_image_meta, batch_rpn_match, batch_rpn_bbox,
                           batch_gt_class_ids, batch_gt_boxes, batch_gt_masks]
@@ -405,12 +407,12 @@ def build_detection_targets(rpn_rois, gt_class_ids, gt_boxes, gt_masks, config):
     rpn_roi_gt_class_ids = gt_class_ids[rpn_roi_iou_argmax]
 
     # Positive ROIs are those with >= 0.5 IoU with a GT box
-    fg_ids = np.where(rpn_roi_iou_argmax > 0.5)[0]
+    fg_ids = np.where(rpn_roi_iou_max > 0.5)[0]
 
     # Negative ROIs are those IoU 0.1 - 0.5 (hard example mining)
     # TODO: To hard example mine or not to hard example mine, that's the question
     # bg_ids = np.where((rpn_roi_iou_max >= 0.1) & (rpn_roi_iou_max) < 0.5)[0]
-    bg_ids = np.where(rpn_roi_iou_argmax < 0.5)[0]
+    bg_ids = np.where(rpn_roi_iou_max < 0.5)[0]
 
     # Subsample ROIs. Aim for 33% forground
     # FG
@@ -438,7 +440,7 @@ def build_detection_targets(rpn_rois, gt_class_ids, gt_boxes, gt_masks, config):
         # This is a small chance we have neither fg nor bg samples.
         if keep.shape[0] == 0:
             # Pick bg regions with easier IoU threshold
-            bg_ids = np.where(rpn_roi_iou_argmax < 0.5)[0]
+            bg_ids = np.where(rpn_roi_iou_max < 0.5)[0]
             assert bg_ids.shape[0] >= remaining
             keep_bg_ids = np.random.choice(bg_ids, remaining, replace=False)
             assert keep_bg_ids.shape[0] == remaining
@@ -447,7 +449,6 @@ def build_detection_targets(rpn_rois, gt_class_ids, gt_boxes, gt_masks, config):
             # Fill the rest with repeated bg rois
             keep_extra_ids = np.random.choice(keep_bg_ids, remaining, replace=True)
             keep = np.concatenate([keep, keep_extra_ids])
-
     assert keep.shape[0] == config.TRAIN_ROIS_PER_IMAGE, "keep doesn't match ROI batch size {}, {}".format(
         keep.shape[0], config.TRAIN_ROIS_PER_IMAGE
     )
@@ -461,13 +462,45 @@ def build_detection_targets(rpn_rois, gt_class_ids, gt_boxes, gt_masks, config):
     roi_gt_boxes = rpn_roi_gt_boxes[keep]
     roi_gt_class_ids = rpn_roi_gt_class_ids[keep]
     roi_gt_assignment = rpn_roi_iou_argmax[keep]
-
     # Class-ware bbox deltas. [y, x, log(h), log(w)]
     bboxes = np.zeros((config.TRAIN_ROIS_PER_IMAGE, config.NUM_CLASSES, 4), dtype=np.float32)
     pos_ids = np.where(roi_gt_class_ids > 0)[0]
+    # Set correspond class scores to IoU
     bboxes[pos_ids, roi_gt_class_ids[pos_ids]] = box_refinement(rois[pos_ids], roi_gt_boxes[pos_ids, :4])
     # Normalize bbox refinements
     bboxes /= config.BBOX_SED_DEV
+
+    # Generate class-specific target masks
+    masks = np.zeros((config.TRAIN_ROIS_PER_IMAGE, config.MASK_SHAPE[0], config.MASK_SHAPE[1], config.NUM_CLASSES),
+                     dtype=np.float32)
+    for i in pos_ids:
+        class_id = roi_gt_class_ids[i]
+        assert class_id > 0, "class id must be greater than 0"
+        gt_id = roi_gt_assignment[i]
+        class_mask = gt_masks[:, :, gt_id]
+
+        if config.USE_MINI_MASK:
+            # Create a mask placeholder, the size of the image
+            placeholder = np.zeros(config.IMAGE_SHAPE[:2], dtype=bool)
+            # GT box
+            gt_y1, gt_x1, gt_y2, gt_x2 = gt_boxes[gt_id]
+            gt_w = gt_x2 - gt_x1
+            gt_h = gt_y2 - gt_y1
+            # Resize mini mask to size of GT box
+            placeholder[gt_y1:gt_y2, gt_x1:gt_x2] = \
+            np.round(skimage.transform.resize(class_mask, (gt_h, gt_w), order=1, mode="constant")).astype(bool)
+            # Place the mini batch in the placeholder
+            class_mask = placeholder
+
+        # Pick part of the mask and resize it
+        y1, x1, y2, x2 = rois[i].astype(np.int32)
+        m = class_mask[y1:y2, x1:x2]
+        mask = skimage.transform.resize(m, config.MASK_SHAPE, order=1, mode="constant")
+        mask[i, :, :, class_id] = mask
+
+    return rois, roi_gt_class_ids, bboxes, masks
+
+
 
 ############################################################
 #  Anchors
