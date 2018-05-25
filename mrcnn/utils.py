@@ -6,6 +6,7 @@ import warnings
 import scipy
 
 import tensorflow as tf
+import keras.layers as KL
 
 ############################################################
 #  Utility Functions
@@ -298,3 +299,20 @@ def norm_boxes_graph(boxes, shape):
     scale = tf.concat([h, w, h, w], axis=-1) - tf.constant(1.0)
     shift = tf.constant([0., 0., 1., 1.])
     return tf.divide(boxes - shift, scale)
+
+class BatchNorm(KL.BatchNormalization):
+    """Extends the Keras BatchNormalization class to allow a central place
+    to make changes if needed.
+
+    Batch normalization has a negative effect on training if batches are small
+    so this layer is often frozen (via setting in Config class) and functions
+    as linear layer.
+    """
+    def call(self, inputs, training=None):
+        """
+        Note about training values:
+            None: Train BN layers. This is the normal mode
+            False: Freeze BN layers. Good when batch size is small
+            True: (don't use). Set layer in training mode even when inferencing
+        """
+        return super(self.__class__, self).call(inputs, training=training)
