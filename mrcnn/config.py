@@ -121,6 +121,12 @@ class Config(object):
     # To change this you also need to change the neural network mask branch
     MASK_SHAPE = (28, 28)
 
+    # Train or freeze batch normalization layers
+    #     None: Train BN layers. This is the normal mode
+    #     False: Freeze BN layers. Good when using a small batch size
+    #     True: (don't use). Set layer in training mode even when inferencing
+    TRAIN_BN = False  # Defaulting to False since batch size is often small
+
     def __init__(self):
         # Effective batch size
         self.BATCH_SIZE = self.IMAGES_PER_GPU * self.GPU_COUNT
