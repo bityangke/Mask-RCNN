@@ -16,6 +16,7 @@ from mrcnn.data_generator import *
 import keras
 import keras.backend as K
 import keras.layers as KL
+import keras.models as KM
 
 import tensorflow as tf
 
@@ -115,7 +116,16 @@ class MaskRCNN():
         mrcnn_feature_maps = [P2, P3, P4, P5]
 
         # Anchor
+        if mode == "training":
+            anchors = self.get_anchors(config.IMAGE_SHAPE)
+            # Duplicate across the batch dimension because Keras requires it
+            anchors = np.broadcast_to(anchors, (config.BATCH_SIZE,) + anchors.shape)
+            # A hack to get around Keras's bad support for constants
+            anchors = KL.Lambda(lambda x: tf.constant(anchors), name="anchors")(input_image)
+        else:
+            anchors = input_anchors
 
+        # RPN Model
 
 
 
@@ -296,9 +306,6 @@ class MaskRCNN():
         )
         self.epoch = max(self.epoch, epochs)
 
-
-
-
     def set_trainable(self, layer_regex, keras_model=None, indent=0, verbose=1):
         """Sets model layers as trainable if their names match
         the given regular expression.
@@ -371,6 +378,29 @@ class MaskRCNN():
             layer = self.keras_model.get_layer(name)
             self.keras_model.metrics_names.append(name)
             self.keras_model.metrics_tensors.append(tf.reduce_mean(layer.output, keep_dims=True))
+
+    def get_anchors(self, image_shape):
+        """Returns anchor pyramid for the given image size."""
+        backbone_shapes = compute_backbone_shapes(self.config, image_shape)
+        #  Cache anchors and resue if image shape is the same
+        if not hasattr(self, "_anchor_cache"):
+            self._anchor_cache = []
+        if not tuple(image_shape) in self._anchor_cache:
+            # Generate Anchors
+            a = generate_pyramid_anchors(
+                self.config.RPN_ANCHOR_SCALES,
+                self.config.RPN_ANCHOR_RATIOS,
+                backbone_shapes,
+                self.config.BACKBONE_STRIDES,
+                self.config.RPN_ANCHOR_STRIDE
+            )
+        # Keep a copy of the latest anchors in pixel coordinates because
+        # it's used in inspect_model notebooks.
+        # TODO: inspect_model???
+        self.anchor = a
+        # Normalize coordinates
+        self._anchor_cache[tuple(image_shape)] = norm_boxes(a, image_shape[:2])
+        return self._anchor_cache[tuple(image_shape)]
 
 ############################################################
 #  Resnet Graph
@@ -482,3 +512,47 @@ def resnet_graph(input_image, architecture, stage5=False, train_bn=True):
     else:
         C5 = None
     return [C1, C2, C3, C4, C5]
+
+############################################################
+#  Region Proposal Network (RPN)
+############################################################
+def rpn_graph(feature_map, anchors_per_location, anchor_stride):
+    """Builds the computation graph of Region Proposal Network.
+
+    feature_map: backbone features [batch, height, width, depth]
+    anchors_per_location: number of anchors per pixel in the feature map
+    anchor_stride: Controls the density of anchors. Typically 1 (anchors for
+                   every pixel in the feature map), or 2 (every other pixel).
+
+    Returns:
+        rpn_logits: [batch, H, W, 2] Anchor classifier logits (before softmax)
+        rpn_probs: [batch, H, W, 2] Anchor classifier probabilities.
+        rpn_bbox: [batch, H, W, (dy, dx, log(dh), log(dw))] Deltas to be
+                  applied to anchors.
+    """
+    # TODO: check if stride of 2 causes alignment issues if the featuremap
+    #       is not even.
+    # Shared convolutional base of the RPN
+    shared = KL.Conv2D(512, (3, 3), padding='same', activation='relu', strides=anchor_stride,
+                       name="rpn_conv_shared")(feature_map)
+
+
+def build_rpn_model(anchor_stride, anchors_per_location, depth):
+    """Builds a Keras model of the Region Proposal Network.
+    It wraps the RPN graph so it can be used multiple times with shared
+    weights.
+
+    anchors_per_location: number of anchors per pixel in the feature map
+    anchor_stride: Controls the density of anchors. Typically 1 (anchors for
+                   every pixel in the feature map), or 2 (every other pixel).
+    depth: Depth of the backbone feature map.
+
+    Returns a Keras Model object. The model outputs, when called, are:
+    rpn_logits: [batch, H, W, 2] Anchor classifier logits (before softmax)
+    rpn_probs: [batch, W, W, 2] Anchor classifier probabilities.
+    rpn_bbox: [batch, H, W, (dy, dx, log(dh), log(dw))] Deltas to be
+                applied to anchors.
+    """
+    input_feature_map = KL.Input(shape=[None, None, depth], name="input_rpn_feature_map")
+    outputs = rpn_graph(input_feature_map, anchors_per_location, anchor_stride)
+    return KM.Model([input_feature_map], outputs, name="rpn_model")
