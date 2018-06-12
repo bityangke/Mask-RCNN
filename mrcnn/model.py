@@ -17,6 +17,7 @@ import keras
 import keras.backend as K
 import keras.layers as KL
 import keras.models as KM
+import keras.engine as KE
 
 import tensorflow as tf
 
@@ -136,6 +137,23 @@ class MaskRCNN():
         # Concatenate layer outputs
         # of outputs across levels.
         # e.g. [[a1, b1, c1], [a2, b2, c2]] => [[a1, a2], [b1, b2], [c1, c2]]
+        output_name = ["rpn_class_logits", "rpn_class", "rpn_bbox"]
+        outputs = list(zip(*layer_output))
+        outputs = [KL.Concatenate(axis=1, name=n)(list(o))
+                   for o, n in zip(outputs, output_name)]
+
+        rpn_class_logits, rpn_class, rpn_bbox = outputs
+        # Generate proposals
+        # Proposals are [batch, N, (y1, x1, y2, x2)] in normalized coordinates
+        # and zero padded.
+        proposal_count = config.POST_NMS_ROIS_TRAINING if mode == "training" \
+            else config.POST_NMS_ROIS_INFERENCE
+        rpn_rois = ProposalLayer(
+            proposal_count = proposal_count,
+            num_threshold = config.RPN_NMS_THRESHOLD,
+            name = "ROI",
+            config = config
+        )([rpn_class, rpn_bbox, anchors])
 
 
 
@@ -585,3 +603,47 @@ def build_rpn_model(anchor_stride, anchors_per_location, depth):
     input_feature_map = KL.Input(shape=[None, None, depth], name="input_rpn_feature_map")
     outputs = rpn_graph(input_feature_map, anchors_per_location, anchor_stride)
     return KM.Model([input_feature_map], outputs, name="rpn_model")
+
+############################################################
+#  Proposal Layer
+############################################################
+class ProposalLayer(KE.Layer):
+    """Receives anchor scores and selects a subset to pass as proposals
+    to the second stage. Filtering is done based on anchor scores and
+    non-max suppression to remove overlaps. It also applies bounding
+    box refinement deltas to anchors.
+
+    Inputs:
+        rpn_probs: [batch, anchors, (bg prob, fg prob)]
+        rpn_bbox: [batch, anchors, (dy, dx, log(dh), log(dw))]
+        anchors: [batch, (y1, x1, y2, x2)] anchors in normalized coordinates
+
+    Returns:
+        Proposals in normalized coordinates [batch, rois, (y1, x1, y2, x2)]
+    """
+    def __init__(self, proposal_count, nms_threshold, config=None, **kwargs):
+        sum(ProposalLayer, self).__init__(**kwargs)
+        self.config = config
+        self.proposal_count = proposal_count
+        self.nms_threshold = nms_threshold
+
+    def call(self, inputs):
+        # Box scores. Use the foreground class confidence. [Batch, num_rois, 1]
+        scores = inputs[0][:, :, 1]
+        # Box deltas [batch, num_rois, 4]
+        deltas = inputs[1]
+        deltas = deltas * np.reshape(self.config.RPN_BBOX_STD_DEV, [1, 1, 4])
+        # Anchors
+        anchors = inputs[2]
+
+        # Improve performance by trimming to top anchors by score
+        # and doing the rest on the smaller subset.
+        pre_nms_limit = tf.minimum(6000, tf.shape(anchors)[1])
+        ix = tf.nn.top_k(scores, pre_nms_limit, sorted=True, name="top_anchors").indices
+        scores =
+
+
+
+
+    def compute_output_shape(self, input_shape):
+        return (None, self.proposal_count, 4)
