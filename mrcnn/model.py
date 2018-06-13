@@ -640,7 +640,16 @@ class ProposalLayer(KE.Layer):
         # and doing the rest on the smaller subset.
         pre_nms_limit = tf.minimum(6000, tf.shape(anchors)[1])
         ix = tf.nn.top_k(scores, pre_nms_limit, sorted=True, name="top_anchors").indices
-        scores =
+        scores = batch_slice([scores, ix], lambda x, y: tf.gather(x, y),
+                             self.config.IMAGES_PER_GPU)
+        deltas = batch_slice([deltas, ix], lambda x, y: tf.gather(x, y),
+                             self.config.IMAGES_PER_GPU)
+        pre_nms_anchors = batch_slice([anchors, ix], lambda a, x: tf.gather(a, x),
+                                      self.config.IMAGES_PER_GPU,
+                                      names=["pre_nms_anchors"])
+
+        # Apply deltas to anchors to get refined
+
 
 
 
